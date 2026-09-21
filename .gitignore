@@ -1,10 +1,13 @@
-#data
+# Données (spectrogrammes prétraités) et fichiers audio bruts
+data/
 audio_files/
 
-
-#venv
-.venv/
-.claude
+# Checkpoints et figures générés
 models/
-data/
+
+# Environnement et caches
+.venv/
 __pycache__/
+
+# Config locale de Claude Code
+.claude
