@@ -15,18 +15,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import ConfusionMatrixDisplay
 
-from preprocess import (
-    AUDIO_ROOT,
-    ZIP_GLOBS,
-    Dataset,
-    build_dataset,
-    iter_zip_wavs,
-    normalize,
-    subset,
-)
+from preprocess import ZIP_GLOBS, Dataset, build_zip_dataset, normalize, subset
 from train import MODELS_DIR, evaluate_tensors, fit
 
-EXCLUDED = frozenset({"rasim"})
 SAMPLES = ["sample1", "sample2", "sample3"]
 
 
@@ -35,13 +26,9 @@ def select(data: Dataset, samples: list[str]) -> Dataset:
 
 
 def main(source: str) -> None:
-    zip_glob = ZIP_GLOBS[source]
     figure_path = MODELS_DIR / f"cv_{source}_confusion_matrices.png"
-    classes = sorted({c for c, *_ in iter_zip_wavs(AUDIO_ROOT, EXCLUDED, zip_glob)})
-    label_map = {name: idx for idx, name in enumerate(classes)}
-    print(f"Classes : {classes}")
-
-    data = build_dataset(iter_zip_wavs(AUDIO_ROOT, EXCLUDED, zip_glob), label_map)
+    data, label_map = build_zip_dataset(source)
+    classes = list(label_map)
 
     accuracies: list[float] = []
     matrices: list[np.ndarray] = []
@@ -54,7 +41,7 @@ def main(source: str) -> None:
         train, test = normalize(train, mean, std), normalize(test, mean, std)
 
         model_path = MODELS_DIR / f"cv_{source}_{test_sample}.pt"
-        fit(train.X, train.y, label_map, model_path)
+        fit(train.X, train.y, label_map, model_path, (mean, std))
         acc, cm = evaluate_tensors(
             model_path, test.X, test.y, label_map, f"Test {test_sample} (train {train_samples})"
         )

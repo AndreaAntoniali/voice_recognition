@@ -5,9 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "audioop-lts>=0.2.2",
+    "ffmpeg>=1.4",
     "matplotlib>=3.11.2",
     "numpy>=2.5.3",
+    "pydub>=0.25.1",
+    "pyloudnorm>=0.2.0",
     "scikit-learn>=1.9.1",
+    "static-ffmpeg>=3.0",
     "torch>=2.14.0",
     "torchaudio>=2.11.0",
 ]

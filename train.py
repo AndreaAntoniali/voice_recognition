@@ -1,9 +1,14 @@
 """Entraîne le CNN de reconnaissance de locuteur et l'évalue sur les test sets.
 
-`python train.py`            : entraîne sur le dataset d'origine + les zips 16 kHz.
-`python train.py --no-extra` : baseline, entraîne sur le dataset d'origine seul.
+`python train.py`                : entraîne sur le dataset d'origine + les zips 16 kHz.
+`python train.py --no-extra`     : baseline, entraîne sur le dataset d'origine seul.
 Dans les deux cas l'évaluation porte sur le même test d'origine et sur le sample
 réservé (test_extra), ce qui permet de mesurer l'apport des données supplémentaires.
+
+`python train.py --source python` : modèle final entraîné sur TOUS les samples de la
+source Python (rasim exclu), sauvegardé dans models/best_model_python.pt et utilisé par
+défaut par predict.py. Il n'y a alors aucun jeu de test : la val_acc affichée est
+optimiste, l'estimation honnête est donnée par `cross_validate.py --source python`.
 """
 
 import argparse
@@ -18,6 +23,7 @@ from torch.utils.data import DataLoader
 
 from dataset import SpeakerDataset
 from model import SpeakerCNN
+from preprocess import ZIP_GLOBS, build_zip_dataset, normalize
 
 # --- Configuration -----------------------------------------------------------
 
@@ -88,10 +94,17 @@ def run_epoch(
 
 
 def fit(
-    X: torch.Tensor, y: torch.Tensor, label_map: dict[str, int], best_model_path: Path
+    X: torch.Tensor,
+    y: torch.Tensor,
+    label_map: dict[str, int],
+    best_model_path: Path,
+    norm_stats: tuple[float, float],
 ) -> None:
     """Entraîne un SpeakerCNN sur (X, y) avec early stopping sur un split de validation
-    interne, et sauvegarde le meilleur checkpoint dans `best_model_path`."""
+    interne, et sauvegarde le meilleur checkpoint dans `best_model_path`.
+
+    `norm_stats` = (mean, std) utilisés pour normaliser X : ils sont stockés dans le
+    checkpoint pour que `predict.py` normalise les nouveaux audios de la même façon."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
@@ -119,7 +132,15 @@ def fit(
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             epochs_without_improvement = 0
-            torch.save({"state_dict": model.state_dict(), "label_map": label_map}, best_model_path)
+            torch.save(
+                {
+                    "state_dict": model.state_dict(),
+                    "label_map": label_map,
+                    "mean": norm_stats[0],
+                    "std": norm_stats[1],
+                },
+                best_model_path,
+            )
         else:
             epochs_without_improvement += 1
             if epochs_without_improvement >= PATIENCE:
@@ -137,8 +158,31 @@ def train(use_extra: bool, best_model_path: Path) -> dict[str, int]:
         X_full, y_full = X_full[keep], y_full[keep]
     print(f"Entraînement sur {len(y_full)} segments (use_extra={use_extra})")
 
-    fit(X_full, y_full, label_map, best_model_path)
+    fit(X_full, y_full, label_map, best_model_path, (train_data["mean"], train_data["std"]))
     return label_map
+
+
+def train_on_zips(source: str, best_model_path: Path) -> None:
+    """Entraîne un modèle final sur tous les samples d'une source de zips (sans test).
+
+    Les statistiques de normalisation sont calculées sur l'ensemble du dataset et
+    stockées dans le checkpoint pour `predict.py`.
+
+    Args:
+        source: clé de `ZIP_GLOBS` ("audacity" ou "python").
+        best_model_path: où sauvegarder le meilleur checkpoint.
+    """
+    data, label_map = build_zip_dataset(source)
+    mean, std = data.X.mean().item(), data.X.std().item()
+    data = normalize(data, mean, std)
+    print(f"Entraînement sur {len(data.y)} segments, samples : {sorted(set(data.source))}")
+
+    fit(data.X, data.y, label_map, best_model_path, (mean, std))
+    print(
+        "\nModèle entraîné sur tous les samples : aucune évaluation sur un jeu de test.\n"
+        "La val_acc ci-dessus est optimiste (segments voisins d'un même enregistrement) ;\n"
+        f"pour une estimation honnête, lancer `python cross_validate.py --source {source}`."
+    )
 
 
 def evaluate_tensors(
@@ -194,11 +238,22 @@ def evaluate(label_map: dict[str, int], best_model_path: Path, test_file: str, t
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-extra", action="store_true", help="baseline : dataset d'origine seul")
+    parser.add_argument(
+        "--source",
+        choices=["default", *sorted(ZIP_GLOBS)],
+        default="default",
+        help="'default' : data/*.pt ; sinon modèle final entraîné sur tous les samples des zips",
+    )
     args = parser.parse_args()
 
-    use_extra = not args.no_extra
-    best_model_path = MODELS_DIR / ("best_model.pt" if use_extra else "best_model_original.pt")
+    if args.source != "default":
+        if args.no_extra:
+            parser.error("--no-extra n'a de sens qu'avec --source default")
+        train_on_zips(args.source, MODELS_DIR / f"best_model_{args.source}.pt")
+    else:
+        use_extra = not args.no_extra
+        best_model_path = MODELS_DIR / ("best_model.pt" if use_extra else "best_model_original.pt")
 
-    label_map = train(use_extra, best_model_path)
-    evaluate(label_map, best_model_path, "test_data.pt", "Test d'origine")
-    evaluate(label_map, best_model_path, "test_extra_data.pt", "Test sample3 (autre session)")
+        label_map = train(use_extra, best_model_path)
+        evaluate(label_map, best_model_path, "test_data.pt", "Test d'origine")
+        evaluate(label_map, best_model_path, "test_extra_data.pt", "Test sample3 (autre session)")

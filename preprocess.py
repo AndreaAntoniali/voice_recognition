@@ -35,6 +35,9 @@ ZIP_GLOBS = {
 }
 ZIP_GLOB = ZIP_GLOBS["audacity"]
 EXCLUDE_CLASSES: frozenset[str] = frozenset()  # classes à ignorer (ex. {"rasim"})
+# Classes exclues pour les entraînements sur les zips seuls (validation croisée, modèle
+# final) : rasim n'a un zip que pour le sample 1.
+FINAL_EXCLUDED_CLASSES: frozenset[str] = frozenset({"rasim"})
 HELD_OUT_SAMPLE = "sample3"  # sample réservé au test ; les autres vont dans le train
 OUTPUT_DIR = Path(__file__).resolve().parent / "data"
 
@@ -132,6 +135,21 @@ def fix_length(waveform: torch.Tensor, target_length: int) -> torch.Tensor:
     return waveform[..., :target_length]
 
 
+def make_mel_transforms() -> tuple[
+    torchaudio.transforms.MelSpectrogram, torchaudio.transforms.AmplitudeToDB
+]:
+    """Construit les transformations Mel + dB avec les paramètres du projet. Partagé par
+    le prétraitement et l'inférence (`predict.py`) pour garantir les mêmes features."""
+    mel_transform = torchaudio.transforms.MelSpectrogram(
+        sample_rate=TARGET_SAMPLE_RATE,
+        n_fft=N_FFT,
+        hop_length=HOP_LENGTH,
+        n_mels=N_MELS,
+    )
+    db_transform = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80)
+    return mel_transform, db_transform
+
+
 def process_file(
     wav_file: "io.IOBase",
     name: str,
@@ -165,13 +183,7 @@ class Dataset(NamedTuple):
 
 
 def build_dataset(items: Iterator[AudioItem], label_map: dict[str, int]) -> Dataset:
-    mel_transform = torchaudio.transforms.MelSpectrogram(
-        sample_rate=TARGET_SAMPLE_RATE,
-        n_fft=N_FFT,
-        hop_length=HOP_LENGTH,
-        n_mels=N_MELS,
-    )
-    db_transform = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80)
+    mel_transform, db_transform = make_mel_transforms()
 
     specs: list[torch.Tensor] = []
     labels: list[int] = []
@@ -195,6 +207,28 @@ def build_dataset(items: Iterator[AudioItem], label_map: dict[str, int]) -> Data
     y = torch.tensor(labels, dtype=torch.long)
     print(f"Dataset : X={tuple(X.shape)}, y={tuple(y.shape)}")
     return Dataset(X, y, sources)
+
+
+def build_zip_dataset(
+    source: str, exclude: frozenset[str] = FINAL_EXCLUDED_CLASSES
+) -> tuple[Dataset, dict[str, int]]:
+    """Construit le `Dataset` (non normalisé) de tous les samples d'une source de zips.
+
+    Args:
+        source: clé de `ZIP_GLOBS` ("audacity" ou "python").
+        exclude: classes à ignorer.
+
+    Returns:
+        `(dataset, label_map)`, le `label_map` étant construit sur les classes trouvées
+        (triées par ordre alphabétique).
+    """
+    zip_glob = ZIP_GLOBS[source]
+    classes = sorted({c for c, *_ in iter_zip_wavs(AUDIO_ROOT, exclude, zip_glob)})
+    if not classes:
+        raise RuntimeError(f"Aucun zip trouvé pour la source '{source}' sous {AUDIO_ROOT}")
+    label_map = {name: idx for idx, name in enumerate(classes)}
+    print(f"Classes : {classes}")
+    return build_dataset(iter_zip_wavs(AUDIO_ROOT, exclude, zip_glob), label_map), label_map
 
 
 # --- Split et normalisation ---------------------------------------------------
