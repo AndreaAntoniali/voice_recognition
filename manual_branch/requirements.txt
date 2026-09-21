@@ -1,0 +1,5 @@
+torch>=2.6,<3
+numpy>=1.26,<3
+soundfile>=0.13,<1
+pytest>=8,<10
+sounddevice>=0.5,<1

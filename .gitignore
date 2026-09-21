@@ -1,2 +1,10 @@
 #data
 audio_files/
+.venv/
+__pycache__/
+.pytest_cache/
+manual_branch/models/*
+!manual_branch/models/.gitkeep
+manual_branch/ecapa_embeddings/*
+!manual_branch/ecapa_embeddings/.gitkeep
+manual_branch/audio/*
