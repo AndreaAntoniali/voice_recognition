@@ -12,9 +12,18 @@ def spec_augment(
     time_mask_param: int = 30,
     p: float = 0.8,
 ) -> torch.Tensor:
-    """Masque aléatoirement une bande de fréquence et une bande temporelle (mise à
-    0) avec probabilité `p`. Inspiré de SpecAugment ; utile pour régulariser
-    l'entraînement sur un dataset aussi réduit. `spec` a la forme (1, n_mels, T)."""
+    """Masque aléatoirement une bande de fréquence et une bande temporelle (mise à 0).
+
+    Inspiré de SpecAugment ; utile pour régulariser l'entraînement sur un dataset réduit.
+    Chaque masque est appliqué indépendamment avec probabilité `p`. Le spectrogramme
+    d'entrée n'est pas modifié (copie).
+
+    Args:
+        spec: spectrogramme normalisé de forme `(1, n_mels, T)`.
+        freq_mask_param: largeur maximale (en bandes de Mel) du masque fréquentiel.
+        time_mask_param: largeur maximale (en frames) du masque temporel.
+        p: probabilité d'appliquer chacun des deux masques.
+    """
     spec = spec.clone()
 
     if random.random() < p:
@@ -36,14 +45,17 @@ class SpeakerDataset(Dataset):
     """Wrap un tensor de spectrogrammes (N, 1, n_mels, T) et leurs labels (N,)."""
 
     def __init__(self, X: torch.Tensor, y: torch.Tensor, augment: bool = False):
+        """`augment=True` applique `spec_augment` à chaque accès (train uniquement)."""
         self.X = X
         self.y = y
         self.augment = augment
 
     def __len__(self) -> int:
+        """Nombre de segments."""
         return len(self.y)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Retourne `(spectrogramme (1, n_mels, T), label)`, augmenté si `augment`."""
         x = self.X[idx]
         if self.augment:
             x = spec_augment(x)

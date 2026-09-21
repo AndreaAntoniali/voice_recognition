@@ -5,8 +5,7 @@
 
 Pour chacun des 3 samples : entraîne sur les 2 autres, teste sur celui-ci, affiche
 accuracy / matrice de confusion / classification report, puis trace les 3 matrices de
-confusion côte à côte (models/cv_<source>_confusion_matrices.png). Le dataset d'origine n'est pas
-utilisé, et rasim est exclu (il n'a un zip 16 kHz que pour le sample 1).
+confusion côte à côte (models/cv_<source>_confusion_matrices.png). Le dataset d'origine n'est pas utilisé, et rasim est exclu (il n'a un zip 16 kHz que pour le sample 1).
 """
 
 import argparse
@@ -31,10 +30,14 @@ SAMPLES = ["sample1", "sample2", "sample3"]
 
 
 def select(data: Dataset, samples: list[str]) -> Dataset:
+    """Garde les segments dont la source (sample) figure dans `samples`."""
     return subset(data, [i for i, s in enumerate(data.source) if s in samples])
 
 
 def main(source: str) -> None:
+    """Lance les 3 folds leave-one-sample-out pour la source `source` ("audacity" ou
+    "python"), affiche les résultats par fold puis un récapitulatif, et sauvegarde la
+    figure des 3 matrices de confusion dans `models/`."""
     zip_glob = ZIP_GLOBS[source]
     figure_path = MODELS_DIR / f"cv_{source}_confusion_matrices.png"
     classes = sorted({c for c, *_ in iter_zip_wavs(AUDIO_ROOT, EXCLUDED, zip_glob)})
@@ -66,7 +69,9 @@ def main(source: str) -> None:
         print(f"test {sample} : {acc:.3f}")
     print(f"moyenne : {np.mean(accuracies):.3f} (écart-type {np.std(accuracies):.3f})")
 
-    fig, axes = plt.subplots(1, len(SAMPLES), figsize=(5 * len(SAMPLES), 4.6), constrained_layout=True)
+    fig, axes = plt.subplots(
+        1, len(SAMPLES), figsize=(5 * len(SAMPLES), 4.6), constrained_layout=True
+    )
     vmax = max(cm.max() for cm in matrices)
     for ax, sample, acc, cm in zip(axes, SAMPLES, accuracies, matrices):
         disp = ConfusionMatrixDisplay(cm, display_labels=classes)

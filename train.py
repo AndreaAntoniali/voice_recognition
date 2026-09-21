@@ -45,7 +45,7 @@ def make_train_val_loaders(
     train_idx = torch.tensor(train_idx, dtype=torch.long)
     val_idx = torch.tensor(val_idx, dtype=torch.long)
 
-    train_ds = SpeakerDataset(X[train_idx], y[train_idx], augment=True)
+    train_ds = SpeakerDataset(X[train_idx], y[train_idx], augment=False)
     val_ds = SpeakerDataset(X[val_idx], y[val_idx], augment=False)
 
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
@@ -130,6 +130,12 @@ def fit(
 
 
 def train(use_extra: bool, best_model_path: Path) -> dict[str, int]:
+    """Entraîne sur `data/train_data.pt` (via `fit`) et retourne le `label_map`.
+
+    Args:
+        use_extra: si False, ne garde que les segments du dataset d'origine (baseline).
+        best_model_path: où sauvegarder le meilleur checkpoint.
+    """
     train_data = torch.load(DATA_DIR / "train_data.pt")
     X_full, y_full, label_map = train_data["X"], train_data["y"], train_data["label_map"]
     if not use_extra:
@@ -187,6 +193,7 @@ def evaluate_tensors(
 
 
 def evaluate(label_map: dict[str, int], best_model_path: Path, test_file: str, title: str) -> None:
+    """Évalue le checkpoint sur un fichier de test de `data/` (voir `evaluate_tensors`)."""
     test_data = torch.load(DATA_DIR / test_file)
     evaluate_tensors(best_model_path, test_data["X"], test_data["y"], label_map, title)
 

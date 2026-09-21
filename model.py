@@ -7,9 +7,14 @@ from torch import nn
 class SpeakerCNN(nn.Module):
     """3 blocs conv (BatchNorm + ReLU + MaxPool), pooling adaptatif puis
     classifieur linéaire. Volontairement petit et régularisé (dropout) car le
-    dataset d'entraînement est très réduit (~100 exemples pour 5 classes)."""
+    dataset d'entraînement est très réduit (quelques centaines d'exemples pour 4 à 5 classes)."""
 
     def __init__(self, num_classes: int = 5, dropout: float = 0.4):
+        """
+        Args:
+            num_classes: nombre de locuteurs à distinguer (taille de la sortie).
+            dropout: probabilité de dropout avant la couche linéaire finale.
+        """
         super().__init__()
 
         self.features = nn.Sequential(
@@ -34,6 +39,7 @@ class SpeakerCNN(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """`x` : spectrogrammes `(B, 1, n_mels, T)`. Retourne les logits `(B, num_classes)`."""
         x = self.features(x)
         x = self.pool(x)
-        return self.classifier(x)  # logits (B, num_classes)
+        return self.classifier(x)
