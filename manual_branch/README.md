@@ -4,7 +4,7 @@ Cette branche produit un embedding vocal `float32` de forme `[192]` et de norme 
 
 ## Organisation des WAV
 
-Placez les fichiers par locuteur : `manual_branch/audio/rasim/`, `manual_branch/audio/personne2/`, etc. Chaque sous-dossier est le label du locuteur. Les WAV doivent être mono, 16 kHz, non vides et finis.
+Les données peuvent être regroupées par source d'enregistrement puis par session de locuteur : `manual_branch/audio/Tel-Caroline/nabil2/*.wav`. Le générateur retire les chiffres finaux du dossier session (`nabil2` devient le label `nabil`) et conserve le nom de la source pour l'analyse. Les WAV doivent être mono, 16 kHz, non vides et finis.
 
 ## Générer les CSV
 
@@ -15,7 +15,7 @@ source .venv/bin/activate
 python -m manual_branch.prepare_data
 ```
 
-Le script crée les trois CSV au format `wav_path,label` et sépare chaque locuteur en environ 70 % entraînement, 15 % validation et 15 % test. Avec 73 fichiers par personne : 51, 11 et 11 fichiers par locuteur.
+Le script parcourt les sous-dossiers récursivement, crée les trois CSV au format `wav_path,label` et sépare chaque locuteur en environ 70 % entraînement, 15 % validation et 15 % test. Les suffixes de session sont normalisés (`andrea3`, `andrea2` → `andrea`).
 
 ## Entraînement
 
